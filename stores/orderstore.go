@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strconv"
@@ -17,12 +18,14 @@ func NewPostgresOrderStore(db *sql.DB) *PostgresOrderStore {
 }
 
 // Order Store Methods
-func (s *PostgresStore) CreateOrder(order m.Order) (m.Order, error) {
+func (s *PostgresStore) CreateOrder(ctx context.Context, order m.Order) (m.Order, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	// Step 1: Insert the order
 	query := `INSERT INTO orders (customer_id, total_price, status) 
 	          VALUES ($1, $2, $3) RETURNING id`
 	var orderID int
-	err := s.DB.QueryRow(query, order.Customer.ID, order.TotalPrice, order.Status).Scan(&orderID)
+	err := s.DB.QueryRowContext(ctx, query, order.Customer.ID, order.TotalPrice, order.Status).Scan(&orderID)
 	if err != nil {
 		log.Println("❌ Error inserting order:", err)
 		return m.Order{}, err
@@ -63,7 +66,7 @@ func (s *PostgresStore) CreateOrder(order m.Order) (m.Order, error) {
 	return order, nil
 }
 
-func (s *PostgresStore) GetOrder(id int) (m.Order, error) {
+func (s *PostgresStore) GetOrder(ctx context.Context, id int) (m.Order, error) {
 	// Step 1: Fetch the Order & Customer
 	query := `SELECT o.id, o.customer_id, c.name, c.email, c.street, c.city, c.state, c.postal_code, c.country, o.total_price, o.status, o.created_at
 	          FROM orders o
@@ -111,19 +114,23 @@ func (s *PostgresStore) GetOrder(id int) (m.Order, error) {
 	return order, nil
 }
 
-func (s *PostgresStore) UpdateOrder(id int, order m.Order) error {
+func (s *PostgresStore) UpdateOrder(ctx context.Context, id int, order m.Order) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := "UPDATE orders SET customer_id = $1, total_price = $2, status = $3 WHERE id = $4"
 	_, err := s.DB.Exec(query, order.Customer.ID, order.TotalPrice, order.Status, id)
 	return err
 }
 
-func (s *PostgresStore) DeleteOrder(id int) error {
+func (s *PostgresStore) DeleteOrder(ctx context.Context, id int) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := "DELETE FROM orders WHERE id = $1"
 	_, err := s.DB.Exec(query, id)
 	return err
 }
 
-func (s *PostgresStore) GetAllOrders() ([]m.Order, error) {
+func (s *PostgresStore) GetAllOrders(ctx context.Context) ([]m.Order, error) {
 	query := `SELECT o.id, o.customer_id, c.name, c.email, c.street, c.city, c.state, c.postal_code, c.country, o.total_price, o.status, o.created_at
 	          FROM orders o
 	          JOIN customers c ON o.customer_id = c.id`
@@ -179,7 +186,7 @@ func (s *PostgresStore) GetAllOrders() ([]m.Order, error) {
 	return orders, nil
 }
 
-func (s *PostgresStore) SearchOrders(criteria m.SearchCriteriaOrders) ([]m.Order, error) {
+func (s *PostgresStore) SearchOrders(ctx context.Context, criteria m.SearchCriteriaOrders) ([]m.Order, error) {
 	// Base query
 	query := `SELECT o.id, o.customer_id, c.name, c.email, c.street, c.city, c.state, c.postal_code, c.country, o.total_price, o.status, o.created_at
 	          FROM orders o

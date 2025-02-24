@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
@@ -45,7 +48,6 @@ func main() {
 	// Setup router
 	r := mux.NewRouter()
 
-	// Define API routes using the unified handler
 	r.HandleFunc("/books/{id}", handler.HandleBook).Methods("GET", "DELETE", "PUT")
 	r.HandleFunc("/books", handler.HandleBooks).Methods("GET", "POST")
 
@@ -58,7 +60,14 @@ func main() {
 	r.HandleFunc("/orders/{id}", handler.HandleOrder).Methods("GET", "DELETE", "PUT")
 	r.HandleFunc("/orders", handler.HandleOrders).Methods("GET", "POST")
 
-	//r.HandleFunc("/reports", handler.HandleReports).Methods("GET")
+	r.HandleFunc("/reports", handler.HandleReports).Methods("GET")
+
+	if _, err := os.Stat("reports"); os.IsNotExist(err) {
+		err = os.Mkdir("reports", 0755)
+		if err != nil {
+			log.Fatalf("Failed to create reports directory: %v", err)
+		}
+	}
 
 	log.Println("Server running on http://localhost:8080")
 
@@ -66,17 +75,58 @@ func main() {
 	stop := make(chan os.Signal, 1)
 	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
 
-	// Run the server in a goroutine
+	go startDailyReportGenerator(store)
+
 	go func() {
 		if err := http.ListenAndServe(":8080", r); err != nil {
 			log.Println("Error starting server:", err)
 		}
 	}()
 
-	// Wait for termination signal
 	<-stop
 	log.Println("Shutting down server...")
 
-	// Close the database connection on shutdown
 	db.Close()
+}
+
+func startDailyReportGenerator(store *s.PostgresStore) {
+
+	ticker := time.NewTicker(24 * time.Hour)
+	//ticker := time.NewTicker(1 * time.Minute)
+
+	defer ticker.Stop()
+
+	for {
+		<-ticker.C
+
+		now := time.Now()
+		// Generate report for the previous day.
+		yesterday := now.AddDate(0, 0, -1)
+		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, yesterday.Location())
+		end := start.Add(24 * time.Hour)
+
+		// Use a background context so it isn't tied to an HTTP request.
+		ctx := context.Background()
+
+		report, err := store.GetSalesReport(ctx, start, end)
+		if err != nil {
+			log.Printf("Error generating daily report: %v", err)
+			continue
+		}
+
+		filename := fmt.Sprintf("reports/daily_report_%s.json", start.Format("20060102"))
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			log.Printf("Error marshalling daily report: %v", err)
+			continue
+		}
+
+		err = os.WriteFile(filename, data, 0644)
+		if err != nil {
+			log.Printf("Error writing daily report to file: %v", err)
+			continue
+		}
+
+		log.Printf("Daily report generated and saved: %s", filename)
+	}
 }

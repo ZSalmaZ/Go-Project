@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strconv"
@@ -17,10 +18,12 @@ func NewPostgresAuthorStore(db *sql.DB) *PostgresAuthorStore {
 }
 
 // Author Store Methods
-func (s *PostgresStore) CreateAuthor(author m.Author) (m.Author, error) {
+func (s *PostgresStore) CreateAuthor(ctx context.Context, author m.Author) (m.Author, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := "INSERT INTO authors (first_name, last_name, bio) VALUES ($1, $2, $3) RETURNING id"
 	var id int
-	err := s.DB.QueryRow(query, author.FirstName, author.LastName, author.Bio).Scan(&id)
+	err := s.DB.QueryRowContext(ctx, query, author.FirstName, author.LastName, author.Bio).Scan(&id)
 	if err != nil {
 		log.Println("Error inserting author:", err)
 		return m.Author{}, err
@@ -29,7 +32,7 @@ func (s *PostgresStore) CreateAuthor(author m.Author) (m.Author, error) {
 	return author, nil
 }
 
-func (s *PostgresStore) GetAuthor(id int) (m.Author, error) {
+func (s *PostgresStore) GetAuthor(ctx context.Context, id int) (m.Author, error) {
 	query := "SELECT id, first_name, last_name, bio FROM authors WHERE id = $1"
 	var author m.Author
 	err := s.DB.QueryRow(query, id).Scan(&author.ID, &author.FirstName, &author.LastName, &author.Bio)
@@ -40,19 +43,24 @@ func (s *PostgresStore) GetAuthor(id int) (m.Author, error) {
 	return author, nil
 }
 
-func (s *PostgresStore) UpdateAuthor(id int, author m.Author) error {
+func (s *PostgresStore) UpdateAuthor(ctx context.Context, id int, author m.Author) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := "UPDATE authors SET first_name = $1, last_name = $2, bio = $3 WHERE id = $4"
 	_, err := s.DB.Exec(query, author.FirstName, author.LastName, author.Bio, id)
 	return err
 }
 
-func (s *PostgresStore) DeleteAuthor(id int) error {
+func (s *PostgresStore) DeleteAuthor(ctx context.Context, id int) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := "DELETE FROM authors WHERE id = $1"
 	_, err := s.DB.Exec(query, id)
 	return err
 }
 
-func (s *PostgresStore) GetAllAuthors() ([]m.Author, error) {
+func (s *PostgresStore) GetAllAuthors(ctx context.Context) ([]m.Author, error) {
+
 	query := "SELECT id, first_name, last_name, bio FROM authors"
 	rows, err := s.DB.Query(query)
 	if err != nil {
@@ -80,7 +88,7 @@ func (s *PostgresStore) GetAllAuthors() ([]m.Author, error) {
 	return authors, nil
 }
 
-func (s *PostgresStore) SearchAuthors(criteria m.SearchCriteriaAuthors) ([]m.Author, error) {
+func (s *PostgresStore) SearchAuthors(ctx context.Context, criteria m.SearchCriteriaAuthors) ([]m.Author, error) {
 	// Base query
 	query := `SELECT id, first_name, last_name, bio FROM authors WHERE 1=1`
 	args := []interface{}{}

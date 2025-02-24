@@ -1,14 +1,18 @@
 package stores
 
-import "database/sql"
+import (
+	"database/sql"
+	"sync"
+)
 
 type PostgresStore struct {
 	DB            *sql.DB
+	Mu            sync.Mutex
 	BookStore     *PostgresBookStore
 	AuthorStore   *PostgresAuthorStore
 	CustomerStore *PostgresCustomerStore
 	OrderStore    *PostgresOrderStore
-	//ReportStore   *s.PostgresReportStore
+	ReportStore   *PostgresReportStore
 }
 
 func NewPostgresStore(db *sql.DB) *PostgresStore {
@@ -18,6 +22,6 @@ func NewPostgresStore(db *sql.DB) *PostgresStore {
 		AuthorStore:   &PostgresAuthorStore{DB: db},
 		CustomerStore: &PostgresCustomerStore{DB: db},
 		OrderStore:    &PostgresOrderStore{DB: db},
-		//	ReportStore:   &s.PostgresReportStore{DB: db},
+		ReportStore:   &PostgresReportStore{DB: db},
 	}
 }

@@ -1,0 +1,118 @@
+CURL COMMANDS:
+
+Authors:
+
+create an author
+curl -X POST http://localhost:8080/authors -H "Content-Type: application/json" -d "{\"first_name\":\"F. Scott\",\"last_name\":\"Fitzgerald\",\"bio\":\"American novelist.\"}"
+
+get all authors:
+curl -X GET http://localhost:8080/authors
+
+
+get author with specific id (here 1)
+curl -X GET http://localhost:8080/authors/1
+
+update author with id:
+curl -X PUT http://localhost:8080/authors/1 -H "Content-Type: application/json" -d "{\"first_name\":\"F. Scott\",\"last_name\":\"Fitzgerald\",\"bio\":\"Updated bio.\"}"
+
+delete author
+curl -X DELETE http://localhost:8080/authors/1
+
+
+search author (by first name)
+curl -X GET "http://localhost:8080/authors?first_name=F.%20Scott"
+
+
+===================================================================
+
+Books:
+
+
+create a book:
+curl -X POST http://localhost:8080/books -H "Content-Type: application/json" -d "{\"title\":\"The Great Gatsby\",\"author\":{\"id\":1},\"genres\":[\"Classic\",\"Fiction\"],\"published_at\":\"1925-04-10T00:00:00Z\",\"price\":10.99,\"stock\":20}"
+
+
+get all books:
+curl -X GET http://localhost:8080/books
+
+
+get book with specific id:
+curl -X GET http://localhost:8080/books/1
+
+
+update book with specific id:
+curl -X PUT http://localhost:8080/books/1 -H "Content-Type: application/json" -d "{\"title\":\"The Great Gatsby Updated\",\"author\":{\"id\":1},\"genres\":[\"Classic\",\"Fiction\"],\"published_at\":\"1925-04-10T00:00:00Z\",\"price\":12.99,\"stock\":15}"
+
+(make sure to have author with the same id here!)
+
+
+delete book with id 1
+curl -X DELETE http://localhost:8080/books/1
+
+search book by title
+curl -X GET "http://localhost:8080/books?title=Gatsby"
+
+===================================================================
+
+
+Customers:
+
+
+create customer:
+curl -X POST http://localhost:8080/customers -H "Content-Type: application/json" -d "{\"name\":\"John Doe\",\"email\":\"sososo@example.com\",\"street\":\"123 Main St\",\"city\":\"Anytown\",\"state\":\"CA\",\"postal_code\":\"12345\",\"country\":\"USA\"}"
+
+get all customers
+curl -X GET http://localhost:8080/customers
+
+get customer with specific id:
+curl -X GET http://localhost:8080/customers/7
+
+update a customer: 
+curl -X PUT http://localhost:8080/customers/9 -H "Content-Type: application/json" -d "{\"name\":\"John Doe\",\"email\":\"john.new@example.com\",\"street\":\"123 Main St\",\"city\":\"Anytown\",\"state\":\"CA\",\"postal_code\":\"12345\",\"country\":\"USA\"}"
+
+delete customer: 
+curl -X DELETE http://localhost:8080/customers/1
+
+
+search customers by name
+curl -X GET "http://localhost:8080/customers?name=John"
+
+===================================================================
+
+
+Orders:
+
+
+create an order
+curl -X POST http://localhost:8080/orders -H "Content-Type: application/json" -d "{\"customer\":{\"id\":1},\"total_price\":59.97,\"status\":\"pending\",\"items\":[{\"book\":{\"id\":1},\"quantity\":3}]}"
+
+
+get all orders
+curl -X GET http://localhost:8080/orders
+
+
+get an order with a specific id
+curl -X GET http://localhost:8080/orders/1
+
+
+update an order
+curl -X PUT http://localhost:8080/orders/3 -H "Content-Type: application/json" -d "{\"customer\":{\"id\":1},\"total_price\":79.97,\"status\":\"confirmed\",\"items\":[{\"book\":{\"id\":1},\"quantity\":4}]}"
+
+delete an order
+curl -X DELETE http://localhost:8080/orders/1
+
+search order by status and customer:
+curl -X GET "http://localhost:8080/orders?customer_name=John&status=pending"
+
+===================================================================
+
+
+Reports:
+curl -X GET "http://localhost:8080/reports?start_date=2025-01-01&end_date=2025-04-30"
+
+===================================================================
+
+
+
+
+

@@ -58,10 +58,18 @@ type BookSales struct {
 	Quantity int  `json:"quantity_sold"`
 }
 
+// type SearchCriteriaBooks struct {
+// 	Title           string `json:"title"`
+// 	AuthorName      string `json:"author_last_name"`
+// 	AuthorFirstName string `json:"author_first_name"`
+// }
+
 type SearchCriteriaBooks struct {
-	Title           string `json:"title"`
-	AuthorName      string `json:"author_last_name"`
-	AuthorFirstName string `json:"author_first_name"`
+	Title           string  `json:"title"`
+	AuthorName      string  `json:"author_last_name"`
+	AuthorFirstName string  `json:"author_first_name"`
+	MinPrice        float64 `json:"min_price"`
+	MaxPrice        float64 `json:"max_price"`
 }
 
 type SearchCriteriaAuthors struct {

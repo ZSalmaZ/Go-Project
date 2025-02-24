@@ -1,6 +1,7 @@
 package stores
 
 import (
+	"context"
 	"database/sql"
 	"log"
 	"strconv"
@@ -17,7 +18,9 @@ func NewPostgresCustomerStore(db *sql.DB) *PostgresCustomerStore {
 }
 
 // ✅ Create a Customer (Fixed Address Fields)
-func (s *PostgresStore) CreateCustomer(customer m.Customer) (m.Customer, error) {
+func (s *PostgresStore) CreateCustomer(ctx context.Context, customer m.Customer) (m.Customer, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := `INSERT INTO customers (name, email, street, city, state, postal_code, country) 
 	          VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`
 	var id int
@@ -31,7 +34,7 @@ func (s *PostgresStore) CreateCustomer(customer m.Customer) (m.Customer, error) 
 }
 
 // ✅ Fetch a Single Customer with Correct Fields
-func (s *PostgresStore) GetCustomer(id int) (m.Customer, error) {
+func (s *PostgresStore) GetCustomer(ctx context.Context, id int) (m.Customer, error) {
 	query := `SELECT id, name, email, street, city, state, postal_code, country FROM customers WHERE id = $1`
 	var customer m.Customer
 	err := s.DB.QueryRow(query, id).Scan(&customer.ID, &customer.Name, &customer.Email, &customer.Street, &customer.City, &customer.State, &customer.PostalCode, &customer.Country)
@@ -43,21 +46,25 @@ func (s *PostgresStore) GetCustomer(id int) (m.Customer, error) {
 }
 
 // ✅ Update a Customer (Fixed Address Fields)
-func (s *PostgresStore) UpdateCustomer(id int, customer m.Customer) error {
+func (s *PostgresStore) UpdateCustomer(ctx context.Context, id int, customer m.Customer) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := `UPDATE customers SET name = $1, email = $2, street = $3, city = $4, state = $5, postal_code = $6, country = $7 WHERE id = $8`
 	_, err := s.DB.Exec(query, customer.Name, customer.Email, customer.Street, customer.City, customer.State, customer.PostalCode, customer.Country, id)
 	return err
 }
 
 // ✅ Delete a Customer
-func (s *PostgresStore) DeleteCustomer(id int) error {
+func (s *PostgresStore) DeleteCustomer(ctx context.Context, id int) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 	query := "DELETE FROM customers WHERE id = $1"
 	_, err := s.DB.Exec(query, id)
 	return err
 }
 
 // ✅ Fetch All Customers (Fixed Address Fields)
-func (s *PostgresStore) GetAllCustomers() ([]m.Customer, error) {
+func (s *PostgresStore) GetAllCustomers(ctx context.Context) ([]m.Customer, error) {
 	query := `SELECT id, name, email, street, city, state, postal_code, country FROM customers`
 	rows, err := s.DB.Query(query)
 	if err != nil {
@@ -85,7 +92,7 @@ func (s *PostgresStore) GetAllCustomers() ([]m.Customer, error) {
 	return customers, nil
 }
 
-func (s *PostgresStore) SearchCustomers(criteria m.SearchCriteriaCustomers) ([]m.Customer, error) {
+func (s *PostgresStore) SearchCustomers(ctx context.Context, criteria m.SearchCriteriaCustomers) ([]m.Customer, error) {
 	// Base query
 	query := `SELECT id, name, email, street, city, state, postal_code, country FROM customers WHERE 1=1`
 	args := []interface{}{}

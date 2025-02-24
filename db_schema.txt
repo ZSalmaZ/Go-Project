@@ -1,0 +1,105 @@
+
+
+-- =========================
+-- Schema for  database mylibrary
+-- =========================
+
+-- 1. Authors
+CREATE TABLE public.authors (
+    id serial PRIMARY KEY,
+    first_name varchar(100) NOT NULL,
+    last_name varchar(100) NOT NULL,
+    bio text
+);
+
+-- 2. Genres
+CREATE TABLE public.genres (
+    id serial PRIMARY KEY,
+    name varchar(255) NOT NULL UNIQUE
+);
+
+-- 3. Books
+CREATE TABLE public.books (
+    id serial PRIMARY KEY,
+    title varchar(255) NOT NULL,
+    author_id integer,
+    published_at timestamp without time zone NOT NULL,
+    price numeric(10,2) NOT NULL,
+    stock integer NOT NULL,
+    CONSTRAINT books_author_id_fkey FOREIGN KEY (author_id)
+        REFERENCES public.authors (id) ON DELETE CASCADE
+);
+
+-- 4. Book_Genres (junction table)
+CREATE TABLE public.book_genres (
+    book_id integer NOT NULL,
+    genre_id integer NOT NULL,
+    PRIMARY KEY (book_id, genre_id),
+    CONSTRAINT book_genres_book_id_fkey FOREIGN KEY (book_id)
+        REFERENCES public.books (id) ON DELETE CASCADE,
+    CONSTRAINT book_genres_genre_id_fkey FOREIGN KEY (genre_id)
+        REFERENCES public.genres (id) ON DELETE CASCADE
+);
+
+-- 5. Book_Sales
+CREATE TABLE public.book_sales (
+    id serial PRIMARY KEY,
+    book_id integer,
+    quantity_sold integer NOT NULL,
+    CONSTRAINT book_sales_book_id_fkey FOREIGN KEY (book_id)
+        REFERENCES public.books (id) ON DELETE CASCADE
+);
+
+-- 6. Customers
+CREATE TABLE public.customers (
+    id serial PRIMARY KEY,
+    name varchar(255) NOT NULL,
+    email varchar(255) NOT NULL UNIQUE,
+    street varchar(255),
+    city varchar(100),
+    state varchar(100),
+    postal_code varchar(20),
+    country varchar(100),
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 7. Orders
+CREATE TABLE public.orders (
+    id serial PRIMARY KEY,
+    customer_id integer,
+    total_price numeric(10,2) NOT NULL,
+    created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    status varchar(50) NOT NULL,
+    CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id)
+        REFERENCES public.customers (id) ON DELETE CASCADE
+);
+
+-- 8. Order_Items
+CREATE TABLE public.order_items (
+    id serial PRIMARY KEY,
+    order_id integer,
+    book_id integer,
+    quantity integer NOT NULL,
+    CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id)
+        REFERENCES public.orders (id) ON DELETE CASCADE,
+    CONSTRAINT order_items_book_id_fkey FOREIGN KEY (book_id)
+        REFERENCES public.books (id) ON DELETE CASCADE
+);
+
+-- 9. Sales_Reports
+CREATE TABLE public.sales_reports (
+    id serial PRIMARY KEY,
+    timestamp timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+    total_revenue numeric(10,2) NOT NULL,
+    total_orders integer NOT NULL
+);
+
+
+
+
+
+
+
+
+
+
