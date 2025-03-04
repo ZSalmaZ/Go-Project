@@ -15,7 +15,6 @@ import (
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
 	"project.com/myproject/auth"
-
 	h "project.com/myproject/handlers"
 	s "project.com/myproject/stores"
 )
@@ -59,6 +58,9 @@ func main() {
 	// Protected Routes (Require Authentication)
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(authMiddleware.Middleware)
+
+	// Apply Rate Limiting Middleware
+	protected.Use(auth.NewRateLimiterMiddleware())
 
 	protected.HandleFunc("/books/{id}", handler.HandleBook).Methods("GET", "DELETE", "PUT")
 	protected.HandleFunc("/books", handler.HandleBooks).Methods("GET", "POST")
