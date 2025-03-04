@@ -14,6 +14,8 @@ import (
 
 	"github.com/gorilla/mux"
 	_ "github.com/lib/pq"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"project.com/myproject/auth"
 	h "project.com/myproject/handlers"
 	s "project.com/myproject/stores"
@@ -26,6 +28,27 @@ const (
 	dbPassword = "2SOUsalma2003"
 	dbName     = "mylibrary"
 )
+
+var (
+	httpRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests",
+		},
+		[]string{"method", "endpoint"},
+	)
+)
+
+func init() {
+	prometheus.MustRegister(httpRequestsTotal)
+}
+
+func metricsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		httpRequestsTotal.WithLabelValues(r.Method, r.URL.Path).Inc()
+		next.ServeHTTP(w, r)
+	})
+}
 
 func main() {
 	// Initialize JWT Manager and Middleware
@@ -51,6 +74,12 @@ func main() {
 
 	// Create Router
 	r := mux.NewRouter()
+
+	// Apply logging middleware
+	r.Use(loggingMiddleware)
+	r.Use(metricsMiddleware)
+
+	r.Handle("/metrics", promhttp.Handler())
 
 	// Register authentication routes
 	authHandler.RegisterRoutes(r)
@@ -159,4 +188,13 @@ func startDailyReportGenerator(store *s.PostgresStore) {
 
 		log.Printf("Daily report generated and saved: %s", filename)
 	}
+}
+
+func loggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		next.ServeHTTP(w, r)
+		duration := time.Since(start)
+		log.Printf("[%s] %s %s %v", r.Method, r.RequestURI, r.RemoteAddr, duration)
+	})
 }

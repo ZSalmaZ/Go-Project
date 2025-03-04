@@ -1,5 +1,17 @@
 CURL COMMANDS:
 
+
+===================================================================
+to login : 
+
+curl -X POST "http://localhost:8080/login" -H "Content-Type: application/json" -d '{"username":"admin","password":"password"}'
+
+
+
+===================================================================
+
+
+
 Authors:
 
 create an author
@@ -111,8 +123,67 @@ Reports:
 curl -X GET "http://localhost:8080/reports?start_date=2025-01-01&end_date=2025-04-30"
 
 ===================================================================
+the routes are to be updated to include the login token
+
+
+===================================================================
+Rate limiting : in ratelimiter.go in auth directory, we set limit to 10 requests per minute.
+
+
+to test it : 
+
+
+# Store your authentication token
+$token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VybmFtZSI6ImFkbWluIiwiZXhwIjoxNzQxMTExOTY3LCJpYXQiOjE3NDExMDgzNjd9.X8kKBfA6Fv-0vesrddcIAax8GtrrhEmiSAScyiH0oFk"
+
+# Run multiple requests with authentication
+for ($i=1; $i -le 15; $i++) {
+    try {
+        # Send request with authentication token
+        $response = Invoke-WebRequest -Uri "http://localhost:8080/api/books" -Method GET -Headers @{ "Authorization" = "Bearer $token" }
+
+        # Extract status code
+        $statusCode = $response.StatusCode
+        Write-Host ("Request " + $i + ": " + $statusCode)
+
+        # ✅ Print the response body when status is 200
+        if ($statusCode -eq 200) {
+            Write-Host "Response: " + $response.Content
+        }
+
+    } catch {
+        # Handle errors (e.g., rate limiting)
+        $errorStatus = $.Exception.Response.StatusCode.Value_
+        Write-Host ("Request " + $i + ": Failed with status " + $errorStatus)
+    }
+
+    Start-Sleep -Seconds 2
+}
+===================================================================
+
+
+Prometheus for monitoring and logging : 
 
 
 
+
+
+download packages: 
+
+
+go get github.com/prometheus/client_golang/prometheus
+go get github.com/prometheus/client_golang/prometheus/promhttp
+
+
+if you send requests you'll get in your terminal reports of the format: 
+
+(base) PS C:\Users\HP\Desktop\CS\Go_Fati\Go-Project> go run main.go
+2025/03/04 18:04:14 Server running on http://localhost:8080
+2025/03/04 18:04:21 [GET] /metrics [::1]:58459 1.1378ms
+2025/03/04 18:04:34 [GET] /api/books [::1]:58467 95.1076ms
+2025/03/04 18:04:36 [GET] /metrics [::1]:58459 554.2µs
+2025/03/04 18:04:37 [GET] /api/books [::1]:58467 3.0549ms
+
+===================================================================
 
 
