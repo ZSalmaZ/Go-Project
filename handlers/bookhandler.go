@@ -10,12 +10,12 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"project.com/myproject/internal/cache" // Import cache package
 	m "project.com/myproject/models"
 )
 
 // Handle Books
 func (h *Handler) HandleBooks(w http.ResponseWriter, r *http.Request) {
-	// Set a request timeout (5 seconds max for execution)
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -27,15 +27,14 @@ func (h *Handler) HandleBooks(w http.ResponseWriter, r *http.Request) {
 	default:
 		switch r.Method {
 		case http.MethodGet:
-			// Run search books in a goroutine only if search params are present
 			title := r.URL.Query().Get("title")
 			authorFirstName := r.URL.Query().Get("author_first_name")
 			authorLastName := r.URL.Query().Get("author_last_name")
 
 			if title != "" || authorFirstName != "" || authorLastName != "" {
-				h.handleSearchBooks(ctx, w, r) // ✅ Run search in a separate thread
+				h.handleSearchBooks(ctx, w, r)
 			} else {
-				h.handleGetAllBooks(ctx, w, r) // Direct call for normal GET (faster)
+				h.handleGetAllBooks(ctx, w, r)
 			}
 
 		case http.MethodPost:
@@ -48,7 +47,6 @@ func (h *Handler) HandleBooks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (h *Handler) HandleBook(w http.ResponseWriter, r *http.Request) {
-	// Create a context with a 5-second timeout
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 
@@ -81,37 +79,73 @@ func (h *Handler) HandleBook(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// Generic Response Helpers
-func (h *Handler) respondWithJSON(w http.ResponseWriter, status int, payload interface{}) {
+// respondWithJSON writes the given data as JSON to the response writer
+func (h *Handler) respondWithJSON(w http.ResponseWriter, status int, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
-	json.NewEncoder(w).Encode(payload)
+	json.NewEncoder(w).Encode(data)
 }
 
+// respondWithError writes an error message as JSON to the response writer
 func (h *Handler) respondWithError(w http.ResponseWriter, status int, message string) {
 	h.respondWithJSON(w, status, map[string]string{"error": message})
 }
 
-// Implement CRUD operations for Books
+// Modify handleGetAllBooks to use caching
 func (h *Handler) handleGetAllBooks(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-	books, err := h.Store.GetAllBooks(ctx) // ✅ Now uses context
+	cacheKey := "all_books"
+
+	// Check Redis cache
+	cachedData, err := cache.GetCache(cacheKey)
+	if err == nil {
+		log.Println("✅ Cache hit: Returning books from Redis")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(cachedData))
+		return
+	}
+
+	// If cache miss, fetch from DB
+	books, err := h.Store.GetAllBooks(ctx)
 	if err != nil {
 		h.respondWithError(w, http.StatusInternalServerError, "Failed to retrieve books")
 		return
 	}
 
+	// Store result in cache for 10 minutes
+	jsonData, _ := json.Marshal(books)
+	cache.SetCache(cacheKey, string(jsonData), 10*time.Minute)
+
 	h.respondWithJSON(w, http.StatusOK, books)
 }
 
+// Modify handleGetBook to use caching
 func (h *Handler) handleGetBook(ctx context.Context, w http.ResponseWriter, id int, res http.ResponseWriter) {
+	cacheKey := "book:" + strconv.Itoa(id)
+
+	// Check Redis cache
+	cachedData, err := cache.GetCache(cacheKey)
+	if err == nil {
+		log.Println("✅ Cache hit: Returning book from Redis")
+		res.Header().Set("Content-Type", "application/json")
+		res.Write([]byte(cachedData))
+		return
+	}
+
+	// If cache miss, fetch from DB
 	book, err := h.Store.GetBook(ctx, id)
 	if err != nil {
 		h.respondWithError(res, http.StatusNotFound, "Book not found")
 		return
 	}
+
+	// Store result in cache for 10 minutes
+	jsonData, _ := json.Marshal(book)
+	cache.SetCache(cacheKey, string(jsonData), 10*time.Minute)
+
 	h.respondWithJSON(res, http.StatusOK, book)
 }
 
+// Modify handleCreateBook to invalidate cache
 func (h *Handler) handleCreateBook(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	var book m.Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
@@ -119,15 +153,19 @@ func (h *Handler) handleCreateBook(ctx context.Context, w http.ResponseWriter, r
 		return
 	}
 
-	newBook, err := h.Store.CreateBook(ctx, book) // ✅ Now uses context
+	newBook, err := h.Store.CreateBook(ctx, book)
 	if err != nil {
 		h.respondWithError(w, http.StatusInternalServerError, "Failed to create book")
 		return
 	}
 
+	// Invalidate book list cache
+	cache.DeleteCache("all_books")
+
 	h.respondWithJSON(w, http.StatusCreated, newBook)
 }
 
+// Modify handleUpdateBook to invalidate cache
 func (h *Handler) handleUpdateBook(ctx context.Context, w http.ResponseWriter, r *http.Request, id int) {
 	var book m.Book
 	if err := json.NewDecoder(r.Body).Decode(&book); err != nil {
@@ -135,51 +173,43 @@ func (h *Handler) handleUpdateBook(ctx context.Context, w http.ResponseWriter, r
 		return
 	}
 
-	err := h.Store.UpdateBook(ctx, id, book) // ✅ Now uses context
+	err := h.Store.UpdateBook(ctx, id, book)
 	if err != nil {
 		h.respondWithError(w, http.StatusInternalServerError, "Failed to update book")
 		return
 	}
 
+	// Invalidate both individual book and book list cache
+	cache.DeleteCache("book:" + strconv.Itoa(id))
+	cache.DeleteCache("all_books")
+
 	h.respondWithJSON(w, http.StatusOK, "Book updated successfully")
 }
 
+// Modify handleDeleteBook to invalidate cache
 func (h *Handler) handleDeleteBook(ctx context.Context, w http.ResponseWriter, id int, res http.ResponseWriter) {
-	err := h.Store.DeleteBook(ctx, id) // ✅ Now uses context
+	err := h.Store.DeleteBook(ctx, id)
 	if err != nil {
 		h.respondWithError(res, http.StatusInternalServerError, "Failed to delete book")
 		return
 	}
+
+	// Invalidate both individual book and book list cache
+	cache.DeleteCache("book:" + strconv.Itoa(id))
+	cache.DeleteCache("all_books")
+
 	h.respondWithJSON(res, http.StatusOK, "Book deleted successfully")
 }
 
-// func (h *Handler) handleSearchBooks(ctx context.Context, w http.ResponseWriter, r *http.Request) {
-// 	criteria := m.SearchCriteriaBooks{
-// 		Title:           r.URL.Query().Get("title"),
-// 		AuthorFirstName: r.URL.Query().Get("author_first_name"),
-// 		AuthorName:      r.URL.Query().Get("author_last_name"),
-// 	}
-
-// 	books, err := h.Store.SearchBooks(ctx, criteria) // ✅ Now uses context
-// 	if err == sql.ErrNoRows {
-// 		h.respondWithError(w, http.StatusNotFound, "No books found")
-// 		return
-// 	} else if err != nil {
-// 		h.respondWithError(w, http.StatusInternalServerError, "Failed to search books")
-// 		return
-// 	}
-
-// 	h.respondWithJSON(w, http.StatusOK, books)
-// }
-
+// Modify handleSearchBooks to use caching
 func (h *Handler) handleSearchBooks(ctx context.Context, w http.ResponseWriter, r *http.Request) {
 	title := r.URL.Query().Get("title")
 	authorFirstName := r.URL.Query().Get("author_first_name")
 	authorName := r.URL.Query().Get("author_last_name")
 
-	// Parse min_price and max_price query parameters.
 	minPriceStr := r.URL.Query().Get("min_price")
 	maxPriceStr := r.URL.Query().Get("max_price")
+
 	var minPrice, maxPrice float64
 	var err error
 	if minPriceStr != "" {
@@ -195,6 +225,15 @@ func (h *Handler) handleSearchBooks(ctx context.Context, w http.ResponseWriter, 
 			h.respondWithError(w, http.StatusBadRequest, "Invalid max_price")
 			return
 		}
+	}
+
+	cacheKey := "search_books:" + title + ":" + authorFirstName + ":" + authorName
+	cachedData, err := cache.GetCache(cacheKey)
+	if err == nil {
+		log.Println("✅ Cache hit: Returning search results from Redis")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(cachedData))
+		return
 	}
 
 	criteria := m.SearchCriteriaBooks{
@@ -213,6 +252,9 @@ func (h *Handler) handleSearchBooks(ctx context.Context, w http.ResponseWriter, 
 		h.respondWithError(w, http.StatusInternalServerError, "Failed to search books")
 		return
 	}
+
+	jsonData, _ := json.Marshal(books)
+	cache.SetCache(cacheKey, string(jsonData), 10*time.Minute)
 
 	h.respondWithJSON(w, http.StatusOK, books)
 }

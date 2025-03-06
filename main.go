@@ -18,6 +18,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"project.com/myproject/auth"
 	h "project.com/myproject/handlers"
+	"project.com/myproject/internal/cache"
 	s "project.com/myproject/stores"
 )
 
@@ -51,9 +52,8 @@ func metricsMiddleware(next http.Handler) http.Handler {
 }
 
 func main() {
-	// Initialize JWT Manager and Middleware
-	jwtManager := auth.NewJWTManager("your_secret_key", time.Hour)
-	authMiddleware := auth.NewAuthMiddleware(jwtManager)
+	// Initialize Redis Cache
+	cache.InitCache()
 
 	// Connect to Database
 	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
@@ -68,6 +68,10 @@ func main() {
 	// Initialize Store
 	store := s.NewPostgresStore(db)
 
+	// Initialize JWT Manager and Middleware
+	jwtManager := auth.NewJWTManager("your_secret_key", time.Hour)
+	authMiddleware := auth.NewAuthMiddleware(jwtManager)
+
 	// Initialize Handlers
 	authHandler := h.NewAuthHandler(jwtManager)
 	handler := h.NewHandler(store)
@@ -75,35 +79,50 @@ func main() {
 	// Create Router
 	r := mux.NewRouter()
 
-	// Apply logging middleware
+	// Apply logging and metrics middleware
 	r.Use(loggingMiddleware)
 	r.Use(metricsMiddleware)
 
-	r.Handle("/metrics", promhttp.Handler())
+	// Public Routes (No Authentication Needed)
+	r.HandleFunc("/login", authHandler.HandleLogin).Methods("POST")
+	r.HandleFunc("/register", authHandler.HandleRegister).Methods("POST")
 
-	// Register authentication routes
-	authHandler.RegisterRoutes(r)
+	// Debugging: Print Registered Routes
+	log.Println("🔹 Registered Routes:")
+	_ = r.Walk(func(route *mux.Route, router *mux.Router, ancestors []*mux.Route) error {
+		path, err := route.GetPathTemplate()
+		if err == nil {
+			log.Println("➡", path)
+		}
+		return nil
+	})
 
 	// Protected Routes (Require Authentication)
 	protected := r.PathPrefix("/api").Subrouter()
 	protected.Use(authMiddleware.Middleware)
+	protected.Use(auth.NewRateLimiterMiddleware()) // Apply Rate Limiting
 
-	// Apply Rate Limiting Middleware
-	protected.Use(auth.NewRateLimiterMiddleware())
-
+	// Books API
 	protected.HandleFunc("/books/{id}", handler.HandleBook).Methods("GET", "DELETE", "PUT")
 	protected.HandleFunc("/books", handler.HandleBooks).Methods("GET", "POST")
 
+	// Authors API
 	protected.HandleFunc("/authors/{id}", handler.HandleAuthor).Methods("GET", "DELETE", "PUT")
 	protected.HandleFunc("/authors", handler.HandleAuthors).Methods("GET", "POST")
 
+	// Customers API
 	protected.HandleFunc("/customers/{id}", handler.HandleCustomer).Methods("GET", "DELETE", "PUT")
 	protected.HandleFunc("/customers", handler.HandleCustomers).Methods("GET", "POST")
 
+	// Orders API
 	protected.HandleFunc("/orders/{id}", handler.HandleOrder).Methods("GET", "DELETE", "PUT")
 	protected.HandleFunc("/orders", handler.HandleOrders).Methods("GET", "POST")
 
+	// Reports API
 	protected.HandleFunc("/reports", handler.HandleReports).Methods("GET")
+
+	// Metrics Endpoint (For Prometheus)
+	r.Handle("/metrics", promhttp.Handler())
 
 	// Ensure "reports" directory exists
 	if _, err := os.Stat("reports"); os.IsNotExist(err) {
@@ -112,7 +131,7 @@ func main() {
 		}
 	}
 
-	log.Println("Server running on http://localhost:8080")
+	log.Println("🚀 Server running on http://localhost:8080")
 
 	// Graceful Shutdown Handling
 	stop := make(chan os.Signal, 1)
@@ -129,12 +148,12 @@ func main() {
 
 	go func() {
 		if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Could not start server: %v", err)
+			log.Fatalf("❌ Could not start server: %v", err)
 		}
 	}()
 
 	<-stop
-	log.Println("Shutting down server...")
+	log.Println("🛑 Shutting down server...")
 
 	// Graceful Shutdown of HTTP Server
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -144,14 +163,12 @@ func main() {
 		log.Fatalf("Server Shutdown Failed: %v", err)
 	}
 
-	log.Println("Server gracefully stopped.")
+	log.Println("✅ Server gracefully stopped.")
 }
 
 // Background Job for Daily Report Generation
 func startDailyReportGenerator(store *s.PostgresStore) {
-
 	ticker := time.NewTicker(24 * time.Hour)
-	//ticker := time.NewTicker(1 * time.Minute)
 
 	defer ticker.Stop()
 
@@ -159,12 +176,10 @@ func startDailyReportGenerator(store *s.PostgresStore) {
 		<-ticker.C
 
 		now := time.Now()
-		// Generate report for the previous day.
 		yesterday := now.AddDate(0, 0, -1)
 		start := time.Date(yesterday.Year(), yesterday.Month(), yesterday.Day(), 0, 0, 0, 0, yesterday.Location())
 		end := start.Add(24 * time.Hour)
 
-		// Use a background context so it isn't tied to an HTTP request.
 		ctx := context.Background()
 
 		report, err := store.GetSalesReport(ctx, start, end)
@@ -186,7 +201,7 @@ func startDailyReportGenerator(store *s.PostgresStore) {
 			continue
 		}
 
-		log.Printf("Daily report generated and saved: %s", filename)
+		log.Printf("📊 Daily report generated: %s", filename)
 	}
 }
 
