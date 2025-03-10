@@ -1,0 +1,278 @@
+openapi: 3.0.3
+info:
+  title: Bookstore API
+  version: 1.0.0
+  description: API for managing authors, books, customers, orders, and reports.
+servers:
+  - url: http://localhost:8080
+    description: Local development server
+
+paths:
+  /authors:
+    get:
+      summary: Get all authors
+      tags: [Authors]
+      responses:
+        200:
+          description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+    post:
+      summary: Create a new author
+      tags: [Authors]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Author'
+      responses:
+        201:
+          description: Author created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Author'
+
+  /authors/search:
+    get:
+      summary: Search authors
+      tags: [Authors]
+      parameters:
+        - name: first_name
+          in: query
+          schema: { type: string }
+        - name: last_name
+          in: query
+          schema: { type: string }
+      responses:
+        200:
+          description: List of authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+
+  /books:
+    get:
+      summary: Get all books
+      tags: [Books]
+      responses:
+        200:
+          description: List of books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+    post:
+      summary: Create a new book
+      tags: [Books]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Book'
+      responses:
+        201:
+          description: Book created successfully
+
+  /books/search:
+    get:
+      summary: Search books
+      tags: [Books]
+      parameters:
+        - name: title
+          in: query
+          schema: { type: string }
+        - name: author_first_name
+          in: query
+          schema: { type: string }
+        - name: author_last_name
+          in: query
+          schema: { type: string }
+        - name: genres
+          in: query
+          schema: { type: string }
+      responses:
+        200:
+          description: List of books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+
+  /customers:
+    get:
+      summary: Search customers
+      tags: [Customers]
+      parameters:
+        - name: name
+          in: query
+          schema: { type: string }
+        - name: email
+          in: query
+          schema: { type: string }
+      responses:
+        200:
+          description: List of customers
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Customer'
+    post:
+      summary: Create a customer
+      tags: [Customers]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Customer'
+      responses:
+        201:
+          description: Customer created successfully
+
+  /customers/{id}:
+    get:
+      summary: Get customer by ID
+      tags: [Customers]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: Customer details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+
+  /orders:
+    get:
+      summary: Get all orders
+      tags: [Orders]
+      responses:
+        200:
+          description: List of orders
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Order'
+    post:
+      summary: Create an order
+      tags: [Orders]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Order'
+      responses:
+        201:
+          description: Order created successfully
+
+  /orders/{id}:
+    get:
+      summary: Get order by ID
+      tags: [Orders]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        200:
+          description: Order details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Order'
+
+  /reports:
+    get:
+      summary: Generate sales report
+      tags: [Reports]
+      responses:
+        200:
+          description: Sales report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Report'
+
+components:
+  schemas:
+    Author:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        first_name: { type: string, example: John }
+        last_name: { type: string, example: Doe }
+        bio: { type: string, example: "Famous author" }
+
+    Book:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        title: { type: string, example: "The Great Adventure" }
+        author: { $ref: '#/components/schemas/Author' }
+        genres:
+          type: array
+          items: { type: string }
+        published_at: { type: string, format: date-time }
+        price: { type: number, format: float }
+        stock: { type: integer }
+
+    Customer:
+      type: object
+      properties:
+        id: { type: integer, example: 1 }
+        name: { type: string }
+        email: { type: string, format: email }
+        street: { type: string }
+        city: { type: string }
+        state: { type: string }
+        postal_code: { type: string }
+        country: { type: string }
+
+    Order:
+      type: object
+      properties:
+        id: { type: integer }
+        customer: { $ref: '#/components/schemas/Customer' }
+        items:
+          type: array
+          items: { $ref: '#/components/schemas/OrderItem' }
+        total_amount: { type: number, format: float }
+        created_at: { type: string, format: date-time }
+
+    OrderItem:
+      type: object
+      properties:
+        book: { $ref: '#/components/schemas/Book' }
+        quantity: { type: integer }
+        price: { type: number, format: float }
+
+    Report:
+      type: object
+      properties:
+        timestamp: { type: string, format: date-time }
+        total_revenue: { type: number }
+        total_orders: { type: integer }
